@@ -23,7 +23,8 @@ public class JsRequestListener {
         this.setMehod(method);
         this.setUrl(url);
         if(null != body){
-            this.setmBody(URLDecoder.decode(body,"utf-8"));
+            // this.setmBody(URLDecoder.decode(body,"utf-8"));
+            this.setmBody(body);
         }else{
             this.setmBody(null);
         }

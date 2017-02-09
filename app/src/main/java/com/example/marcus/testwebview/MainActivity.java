@@ -1,18 +1,31 @@
 package com.example.marcus.testwebview;
 
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
+import android.os.Build;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 
-import org.apache.http.conn.ClientConnectionManager;
-import org.apache.http.impl.client.DefaultHttpClient;
+import java.io.ByteArrayInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.ProtocolException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.Charset;
+import java.util.Iterator;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "myWebView";
@@ -29,7 +42,8 @@ public class MainActivity extends AppCompatActivity {
     private EditText mAddress;
 
     private JsRequestListener mJsListener;
-    private DefaultHttpClient mHttpClient;
+    private URL mReqUrl;
+    private OkHttpClient mOkHttpClient;
     @SuppressLint("JavascriptInterface")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         mJsListener = new JsRequestListener();
-
+        mOkHttpClient = new OkHttpClient();
         mAddress = (EditText) findViewById(R.id.addressEt);
         mAddress.setText(DEFAULT_URL);
         mRetry = (Button) findViewById(R.id.retryBtn);
@@ -52,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
 
         mWebView.addJavascriptInterface(mJsListener,"JsRequestListener");
         mWebView.setWebViewClient(new WebViewClient(){
+
             @Override
             public void onPageFinished(WebView view, String url) {
                 String jsString = "var test1 = function(){var input = document.getElementById(\"userinput\");\n" +
@@ -77,18 +92,75 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
             }
 
+            @TargetApi(Build.VERSION_CODES.LOLLIPOP)
             @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                Log.i(TAG, "url: " + url);
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Log.i(TAG, "url: " + request.getUrl());
                 Log.i(TAG, "form JsRequestListener:" + mJsListener.getMehod()+ "  "
                         + mJsListener.getUrl() + "  " + mJsListener.getBody());
                 if (mJsListener.isPost()){
                     Log.i(TAG,">>>>>>>POST>>>>>>>>>");
                 }
-                return super.shouldInterceptRequest(view, url);
+
+                try {
+                    /** do request by other httpclient **/
+                    mReqUrl = new URL(request.getUrl().toString());
+                    URLConnection rulConnection = mReqUrl.openConnection();
+                    HttpURLConnection conn = (HttpURLConnection) rulConnection;
+                    Map headers = request.getRequestHeaders();
+                    if(null != headers){
+                        Iterator<Map.Entry<String, String>> entries = headers.entrySet().iterator();
+                        while (entries.hasNext()) {
+                            Map.Entry<String, String> entry = entries.next();
+                            conn.setRequestProperty(entry.getKey(),entry.getValue());
+                            Log.d(TAG, entry.getKey() + " : " + entry.getValue());
+                        }
+                    }
+
+                    conn.setRequestMethod(mJsListener.isPost() ? "POST" : "GET");
+
+                    if(mJsListener.isPost()){
+                        DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
+                        //dos.writeBytes(mJsListener.getBody());
+                        String requestString = "name=marcus";
+                        byte[] requestStringBytes = requestString.getBytes("utf-8");
+                        dos.write(requestStringBytes);
+                        dos.flush();
+                        dos.close();
+                        mJsListener.setMehod(null);
+                    }
+
+                    String charset = conn.getContentEncoding() != null ? conn.getContentEncoding() : Charset.defaultCharset().displayName();
+                    String mime = conn.getContentType();
+                    // Parse mime type from contenttype string
+                    if (mime.contains(";")) {
+                        mime = mime.split(";")[0].trim();
+                    }
+                    byte[] pageContents = IOUtils.readFully(conn.getInputStream());
+
+                    // Convert the contents and return
+                    InputStream isContents = new ByteArrayInputStream(pageContents);
+                    Log.e("Client:","mine :" + mime +" Charset: " + charset + " isContents:" + isContents);
+                    //return  super.shouldInterceptRequest(view,url);
+                    return new WebResourceResponse(mime, charset, isContents);
+
+                } catch (ProtocolException e) {
+                    e.printStackTrace();
+
+                    return null;
+                } catch (IOException e) {
+                    e.printStackTrace();
+
+                    return null;
+                } catch (Exception e) {
+                    return null;
+                }
+                // return super.shouldInterceptRequest(view, request);
             }
+
         });
-        mWebView.loadUrl("https://www.baidu.com/");
-        // mWebView.loadUrl(HTTP + HOST + ":" + PORT + "/");
+        // mWebView.loadUrl("https://www.baidu.com/");
+        mWebView.loadUrl(HTTP + HOST + ":" + PORT + "/");
     }
+
 }
