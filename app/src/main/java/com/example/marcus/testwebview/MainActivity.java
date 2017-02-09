@@ -5,7 +5,6 @@ import android.annotation.TargetApi;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.webkit.WebResourceRequest;
@@ -85,8 +84,8 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                String jsString = "var test1 = function(){var input = document.getElementById(\"userinput\");\n" +
-                        "    input.setAttribute('value',\"not from test1()\");}";
+
+                /** 在页面加载完毕后注入的JS代码,改变XMLHttpRequest的运行机制 */
                 String jsString2 = "lastRequestObject = {};\n" +
                         "    XMLHttpRequest.prototype.reallyOpen = XMLHttpRequest.prototype.open;\n" +
                         "    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {\n" +
@@ -116,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
                         + mJsListener.getUrl() + "  " + mJsListener.getBody());
                 // return shouldInterceptRequestByHttpClient(view,request);
                 return shouldInterceptRequestByHttpClientByURLConnection(view,request);
+                //return null;
             }
         });
 
@@ -127,6 +127,10 @@ public class MainActivity extends AppCompatActivity {
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public WebResourceResponse shouldInterceptRequestByHttpClientByURLConnection(WebView view, WebResourceRequest request){
         try {
+            if(request.getMethod().toLowerCase().equals("get")){
+                return null;
+            }
+
             mReqUrl = new URL(request.getUrl().toString());
             URLConnection rulConnection = mReqUrl.openConnection();
             HttpURLConnection conn = (HttpURLConnection) rulConnection;
@@ -159,7 +163,8 @@ public class MainActivity extends AppCompatActivity {
 
             // Convert the contents and return
             InputStream isContents = new ByteArrayInputStream(pageContents);
-            Log.e("Client:","mine :" + mime +" Charset: " + charset + " isContents:" + isContents);
+            String strContents = new String(pageContents, "UTF-8");
+            Log.e("Client:","mine :" + mime +" Charset: " + charset + " isContents:" + strContents);
             //return  super.shouldInterceptRequest(view,url);
             return new WebResourceResponse(mime, charset, isContents);
 
