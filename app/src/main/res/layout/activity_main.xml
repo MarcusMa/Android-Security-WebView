@@ -9,6 +9,10 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     android:orientation="vertical"
     >
+    <EditText
+        android:id="@+id/addressEt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
     <Button
         android:id="@+id/retryBtn"
         android:text="Retry"
