@@ -3,6 +3,10 @@ package com.example.marcus.testwebview;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.Charset;
+
 /**
  * Created by marcus on 17/2/9.
  */
@@ -14,11 +18,15 @@ public class JsRequestListener {
     private String mBody;
 
     @JavascriptInterface
-    public void record(String method, String url, String body){
+    public void record(String method, String url, String body) throws UnsupportedEncodingException {
         Log.d(TAG, method + "  "  + url + "  " + body);
         this.setMehod(method);
         this.setUrl(url);
-        this.setmBody(body);
+        if(null != body){
+            this.setmBody(URLDecoder.decode(body,"utf-8"));
+        }else{
+            this.setmBody(null);
+        }
     }
 
     public String getMehod() {
