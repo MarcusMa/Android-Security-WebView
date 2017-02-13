@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.webkit.CookieManager;
+import android.webkit.CookieSyncManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -22,6 +24,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.cookie.Cookie;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
@@ -59,11 +62,15 @@ public class MainActivity extends AppCompatActivity {
     private JsRequestListener mJsListener;
     private URL mReqUrl;
     private DefaultHttpClient mClient;
+    private String webViewUrl = "https://wappass.baidu.com/";
+
     @SuppressLint("JavascriptInterface")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        CookieSyncManager.createInstance(this);
 
         mJsListener = new JsRequestListener();
         mClient = new DefaultHttpClient();
@@ -78,9 +85,32 @@ public class MainActivity extends AppCompatActivity {
         });
         mWebView = (WebView) findViewById(R.id.testWebView);
         mWebView.getSettings().setJavaScriptEnabled(true);
-
+        mWebView.getSettings().setBuiltInZoomControls(true);
+        mWebView.getSettings().setJavaScriptEnabled(true);
         mWebView.addJavascriptInterface(mJsListener,"JsRequestListener");
         mWebView.setWebViewClient(new WebViewClient(){
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                Log.d(TAG,">>>>>>>>>>>>>>>>>>>>>> shouldOverrideUrlLoading >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+                Log.d(TAG,">>>>>>>>>>>>>>>>>>>>>> origin : "+ view.getUrl()+" >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+                Log.d(TAG,">>>>>>>>>>>>>>>>>>>>>> override : "+ url +" >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+                Log.d(TAG,">>>>>>>>>>>>>>>>>>>>>> shouldOverrideUrlLoading >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+                CookieManager cookieManager = CookieManager.getInstance();
+                List<Cookie> cookies = mClient.getCookieStore().getCookies();
+                //sync all the cookies in the httpclient with the webview by generating cookie string
+                for (Cookie cookie : cookies){
+                    String cookieString = cookie.getName() + "=" + cookie.getValue() + "; domain=" + cookie.getDomain();
+                    Log.e(TAG,"HttpClient Cookies: " + cookieString);
+                    // cookieManager.setCookie(toUrl, cookieString);
+                    // CookieSyncManager.getInstance().sync();
+                }
+
+                webViewUrl = url;
+                return super.shouldOverrideUrlLoading(view, url);
+                // view.loadUrl(url);
+                // return true;
+            }
 
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -97,39 +127,50 @@ public class MainActivity extends AppCompatActivity {
                         "    XMLHttpRequest.prototype.reallySend = XMLHttpRequest.prototype.send;\n" +
                         "    XMLHttpRequest.prototype.send = function(body) {\n" +
                         "        if (typeof(JsRequestListener) !== 'undefined') {\n" +
-                        "            JsRequestListener.record(lastRequestObject.method, lastRequestObject.url, body);\n" +
+                        "            JsRequestListener.record(lastRequestObject.method, lastRequestObject.url, body,document.cookie);\n" +
                         "        }\n" +
                         "        console.log(\"body : \" + body);\n" +
                         "        lastXmlhttpRequestPrototypeMethod = null;\n" +
                         "        this.reallySend(body);\n" +
                         "    };";
                 view.loadUrl("javascript:" + jsString2);
+                CookieManager cookieManager = CookieManager.getInstance();
+                String CookieStr = cookieManager.getCookie(url);
+                if(CookieStr!=null)
+                {
+                    Log.i("cookie", CookieStr);
+                }
+                else{
+                    Log.e("cookie","Cookie is null");
+                }
                 super.onPageFinished(view, url);
             }
 
             @TargetApi(Build.VERSION_CODES.LOLLIPOP)
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                Log.i(TAG, "url: " + request.getUrl());
-                Log.i(TAG, "form JsRequestListener:" + mJsListener.getMehod() + "  "
-                        + mJsListener.getUrl() + "  " + mJsListener.getBody());
-                // return shouldInterceptRequestByHttpClient(view,request);
-                return shouldInterceptRequestByHttpClientByURLConnection(view,request);
-                //return null;
+                Log.w(TAG, "method:" + request.getMethod() + " url: " + request.getUrl());
+                Log.w(TAG, "form JsRequestListener:" + mJsListener.getMehod() + " /  "
+                        + mJsListener.getUrl() + " /  " + mJsListener.getBody());
+                Log.w(TAG, "form JsRequestListener cookies: " + mJsListener.cookies);
+                //return shouldInterceptRequestByHttpClient(view,request);
+                return shouldInterceptRequestByURLConnection(view,request);
+                // return null;
             }
         });
 
-
-        mWebView.loadUrl("https://www.baidu.com/");
+        // mWebView.loadUrl("https://www.taobao.com");
+        // mWebView.loadUrl("https://www.baidu.com/");
+        mWebView.loadUrl(webViewUrl);
         // mWebView.loadUrl(HTTP + HOST + ":" + PORT + "/");
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    public WebResourceResponse shouldInterceptRequestByHttpClientByURLConnection(WebView view, WebResourceRequest request){
+    public WebResourceResponse shouldInterceptRequestByURLConnection(WebView view, WebResourceRequest request){
         try {
-            if(request.getMethod().toLowerCase().equals("get")){
-                return null;
-            }
+//            if(request.getMethod().toLowerCase().equals("get")){
+//                return null;
+//            }
 
             mReqUrl = new URL(request.getUrl().toString());
             URLConnection rulConnection = mReqUrl.openConnection();
@@ -143,14 +184,34 @@ public class MainActivity extends AppCompatActivity {
                     Log.d(TAG, entry.getKey() + " : " + entry.getValue());
                 }
             }
-
-            conn.setRequestMethod(mJsListener.isPost() ? "POST" : "GET");
-            if(mJsListener.isPost()){
+            conn.setRequestMethod(request.getMethod().equalsIgnoreCase("post") ? "POST" : "GET");
+            if(request.getMethod().toLowerCase().equals("post")){
                 DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
                 dos.writeBytes(mJsListener.getBody());
                 dos.flush();
                 dos.close();
                 mJsListener.setMehod(null); // clear for next request
+                mJsListener.setmBody(null);
+                mJsListener.setUrl(null);
+                conn.setRequestProperty("Cookie",mJsListener.cookies);
+            }
+
+            // conn.setRequestProperty("Cookie",mJsListener.cookies);
+            Map<String, List<String>> headFields = conn.getHeaderFields();
+            List<String> cookieList = headFields.get("Set-Cookie");
+
+            if( null != cookieList){
+                Log.e("cookie","**********************Set-Cookie***********************");
+                CookieManager cookieManager = CookieManager.getInstance();
+                // cookieManager.setAcceptCookie(true);
+                CookieManager.getInstance().setAcceptThirdPartyCookies(view,true);
+                for(String cookie: cookieList) {
+                    Log.e("cookie","************ Set-Cookie : " + cookie);
+                    cookieManager.setCookie(webViewUrl, cookie);
+                }
+                CookieSyncManager.getInstance().sync();
+                Log.e("cookie","************ For Url : " + request.getUrl().toString());
+                Log.e("cookie","**********************Set-Cookie***********************");
             }
 
             String charset = conn.getContentEncoding() != null ? conn.getContentEncoding() : Charset.defaultCharset().displayName();
@@ -165,7 +226,6 @@ public class MainActivity extends AppCompatActivity {
             InputStream isContents = new ByteArrayInputStream(pageContents);
             String strContents = new String(pageContents, "UTF-8");
             Log.e("Client:","mine :" + mime +" Charset: " + charset + " isContents:" + strContents);
-            //return  super.shouldInterceptRequest(view,url);
             return new WebResourceResponse(mime, charset, isContents);
 
         } catch (ProtocolException e) {
@@ -179,47 +239,81 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             return null;
         }
-        // return super.shouldInterceptRequest(view, request);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+    @Deprecated
     public WebResourceResponse shouldInterceptRequestByHttpClient(WebView view, WebResourceRequest request){
         try {
             HttpResponse resp = null;
-            if (mJsListener.isPost()) {
-                Log.i(TAG, ">>>>>>>POST>>>>>>>>>");
+            if (request.getMethod().equalsIgnoreCase("post")){
+                Log.i(TAG, ">>>>>>> POST >>>>>>>>>");
+                Log.i(TAG, ">>>>>>> POST BODY >>>> " + mJsListener.getBody());
                 HttpPost postRequest = null;
                 postRequest = new HttpPost(request.getUrl().toString());
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
-                nameValuePairs.add(new BasicNameValuePair("", "jake"));
+                // 处理 JsListener 记录的 POST 参数
+                String[] paramsValuePairs = mJsListener.getBody().split("&");
+                for(String tmp :paramsValuePairs){
+                    String[] keyValue = tmp.split("=");
+                    if(keyValue.length == 2){
+                        nameValuePairs.add(new BasicNameValuePair(keyValue[0].trim(),keyValue[1].trim()));
+                    }
+                }
+                // 清除 JsListener 中的记录
+                mJsListener.setmBody(null);
                 HttpEntity entity = new UrlEncodedFormEntity(nameValuePairs, "utf-8");
                 postRequest.setEntity(entity);
                 resp = mClient.execute(postRequest);
             } else {
+                Log.i(TAG, ">>>>>>> GET >>>>>>>>>");
                 HttpGet getRequest = new HttpGet(request.getUrl().toString());
                 resp = mClient.execute(getRequest);
             }
+
             if(null == resp){
-                return null;
+                return null; // 交由WebView自身处理
             }
+
             if (resp.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
                 Header[] headers = resp.getAllHeaders();
-                String charset = Charset.defaultCharset().displayName(), mime = null;
+                String charset = Charset.defaultCharset().displayName();
+                String mime = null;
+                List<String> cookieList = new ArrayList<String>();
+
                 for (int i = 0; i < headers.length; i++) {
-                    if (headers[i].getName().toLowerCase().equals("content-type")) {
-                        Log.d(TAG,">>>>>>mine:" + mime);
+                    if (headers[i].getName().equalsIgnoreCase("content-type")) {
                         mime = headers[i].getValue();
-                        break;
+                    }
+                    if (headers[i].getName().equalsIgnoreCase("set-cookie")){
+                        cookieList.add(headers[i].getValue());
                     }
                 }
-                if (mime.contains(";")) {
-                    mime = mime.split(";")[0].trim();
+
+                if (cookieList.size()>0){
+                    Log.e("cookie","**********************Set-Cookie***********************");
+                    CookieManager cookieManager = CookieManager.getInstance();
+                    // cookieManager.setAcceptCookie(true);
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(view,true);
+                    for(String cookie: cookieList) {
+                        Log.e("cookie","************ Set-Cookie : " + cookie);
+                        cookieManager.setCookie(webViewUrl, cookie);
+                    }
+                    CookieSyncManager.getInstance().sync();
+                    Log.e("cookie","************ For Url : " + request.getUrl().toString());
+                    Log.e("cookie","**********************Set-Cookie***********************");
                 }
-                //InputStream in = resp.getEntity().getContent();
+
+
+                if (mime.contains(";")) { // 如果mime 是这种形式 text/javascript;charset=utf-8
+                    String[] tmp = mime.split(";");
+                    mime = tmp[0].trim(); // 获取Mime
+                    if (mime.contains("charset")||mime.contains("Charset")){
+                        charset = tmp[1].trim().split("=")[1].trim(); //获取Charset
+                    }
+                }
                 Log.e("Client:", "mine :" + mime + " Charset: " + charset );
                 String content = EntityUtils.toString(resp.getEntity());
-
-                //return  super.shouldInterceptRequest(view,url);
                 return new WebResourceResponse(mime, charset, new ByteArrayInputStream(content.getBytes("UTF-8")));
             }
             else{

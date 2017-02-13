@@ -16,10 +16,12 @@ public class JsRequestListener {
     private String mMehod;
     private String mUrl;
     private String mBody;
+    public String cookies;
 
     @JavascriptInterface
-    public void record(String method, String url, String body) throws UnsupportedEncodingException {
+    public void record(String method, String url, String body, String cookies) throws UnsupportedEncodingException {
         Log.d(TAG, method + "  "  + url + "  " + body);
+        Log.d(TAG," cookies : " + cookies);
         this.setMehod(method);
         this.setUrl(url);
         if(null != body){
@@ -28,6 +30,7 @@ public class JsRequestListener {
         }else{
             this.setmBody(null);
         }
+        this.cookies = cookies;
     }
 
     public String getMehod() {
