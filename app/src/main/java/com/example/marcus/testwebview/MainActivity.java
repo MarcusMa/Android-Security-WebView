@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.webkit.ClientCertRequest;
 import android.webkit.CookieManager;
 import android.webkit.CookieSyncManager;
 import android.webkit.SslErrorHandler;
@@ -44,6 +45,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import javax.security.auth.x500.X500Principal;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -93,6 +95,18 @@ public class MainActivity extends AppCompatActivity {
         mWebView.getSettings().setJavaScriptEnabled(true);
         mWebView.addJavascriptInterface(mJsListener,"JsRequestListener");
         mWebView.setWebViewClient(new WebViewClient(){
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                Log.e(TAG,"onReceivedHttpError()");
+                super.onReceivedHttpError(view, request, errorResponse);
+            }
+
+            @Override
+            public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) {
+                Log.e(TAG,"onReceivedClientCertRequest()");
+                super.onReceivedClientCertRequest(view, request);
+            }
 
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
@@ -173,6 +187,7 @@ public class MainActivity extends AppCompatActivity {
             String cookies = CookieManager.getInstance().getCookie(webViewUrl);
             Log.d(TAG,"Request Cookie :" + cookies);
             conn.setRequestProperty("Cookie",cookies);
+
             Log.d(TAG,">>>>> Response >>>>>");
             // according "Set-Cookie" field to add cookies into CookieManager
             Map<String, List<String>> headFields = conn.getHeaderFields();
@@ -189,7 +204,8 @@ public class MainActivity extends AppCompatActivity {
             // set WebResourceResponse to return
             String charset = conn.getContentEncoding() != null ? conn.getContentEncoding() : Charset.defaultCharset().displayName();
             String mime = conn.getContentType();
-            if (null != mime){
+
+            if (null != mime){ // mine will be null, if throw a CertificateException in TrustManager
                 // parse mime type from content-type string
                 if (mime.contains(";")) {
                     mime = mime.split(";")[0].trim();
@@ -218,7 +234,6 @@ public class MainActivity extends AppCompatActivity {
                         " Content : " + strContents);
                 return new WebResourceResponse(mime,charset,conn.getResponseCode(),"OK",tmpMap,isContents);
             }
-
         } catch (SSLHandshakeException e) {
             e.printStackTrace();
         } catch (NoSuchAlgorithmException e) {
@@ -236,9 +251,21 @@ public class MainActivity extends AppCompatActivity {
         } finally {
             continueFlag = false;
         }
-        return new WebResourceResponse(null,null,null);
+        WebResourceResponse rep = null;
+        try {
+            rep = getDefalutErrorWebResourceResponse();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            rep = new WebResourceResponse(null,null,null);
+        }
+        return rep;
     }
 
+    private static WebResourceResponse getDefalutErrorWebResourceResponse() throws UnsupportedEncodingException {
+        String htmlString = "<p>Error: CertificateException </p>";
+        InputStream in = new ByteArrayInputStream(htmlString.getBytes("UTF-8"));
+        return new WebResourceResponse("text/html","utf-8",in);
+    }
 
     private static TrustManager myX509TrustManager = new X509TrustManager() {
         @Override
@@ -250,6 +277,11 @@ public class MainActivity extends AppCompatActivity {
         public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
             Log.d("X509TrustManager" , "checkServerTrusted()");
             X509Certificate certificate = chain[0];
+            X500Principal issuerPrincipal = certificate.getIssuerX500Principal();
+            Log.d("X509TrustManager" , "issuer name :" + issuerPrincipal.getName());
+            X500Principal subjectPrincipal = certificate.getSubjectX500Principal();
+            Log.d("X509TrustManager" , "subject name :" + subjectPrincipal.getName());
+
             throw new CertificateException("Error");
         }
 
