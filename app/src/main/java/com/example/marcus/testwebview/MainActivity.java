@@ -39,6 +39,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -134,15 +135,6 @@ public class MainActivity extends AppCompatActivity {
                         "        this.reallySend(body);\n" +
                         "    };";
                 view.loadUrl("javascript:" + jsString2);
-                CookieManager cookieManager = CookieManager.getInstance();
-                String CookieStr = cookieManager.getCookie(url);
-                if(CookieStr!=null)
-                {
-                    Log.i("cookie", CookieStr);
-                }
-                else{
-                    Log.e("cookie","Cookie is null");
-                }
                 super.onPageFinished(view, url);
             }
 
@@ -160,31 +152,37 @@ public class MainActivity extends AppCompatActivity {
         });
 
         // mWebView.loadUrl("https://www.taobao.com");
-        // mWebView.loadUrl("https://www.baidu.com/");
-        mWebView.loadUrl(webViewUrl);
+        mWebView.loadUrl("https://www.baidu.com/");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(mWebView,true);
+        }
+        // mWebView.loadUrl(webViewUrl);
         // mWebView.loadUrl(HTTP + HOST + ":" + PORT + "/");
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public WebResourceResponse shouldInterceptRequestByURLConnection(WebView view, WebResourceRequest request){
         try {
-//            if(request.getMethod().toLowerCase().equals("get")){
-//                return null;
-//            }
 
             mReqUrl = new URL(request.getUrl().toString());
             URLConnection rulConnection = mReqUrl.openConnection();
             HttpURLConnection conn = (HttpURLConnection) rulConnection;
+            // set request Method
+            Log.d(TAG, "Request Method : " + request.getMethod());
+            conn.setRequestMethod(request.getMethod().equalsIgnoreCase("post") ? "POST" : "GET");
+
+            // set request Header
             Map headers = request.getRequestHeaders();
             if(null != headers){
                 Iterator<Map.Entry<String, String>> entries = headers.entrySet().iterator();
                 while (entries.hasNext()) {
                     Map.Entry<String, String> entry = entries.next();
                     conn.setRequestProperty(entry.getKey(),entry.getValue());
-                    Log.d(TAG, entry.getKey() + " : " + entry.getValue());
+                    Log.d(TAG, "Request Header : " + entry.getKey() + " : " + entry.getValue());
                 }
             }
-            conn.setRequestMethod(request.getMethod().equalsIgnoreCase("post") ? "POST" : "GET");
+
+            // set request Body if the request is 'POST'
             if(request.getMethod().toLowerCase().equals("post")){
                 DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
                 dos.writeBytes(mJsListener.getBody());
@@ -193,51 +191,61 @@ public class MainActivity extends AppCompatActivity {
                 mJsListener.setMehod(null); // clear for next request
                 mJsListener.setmBody(null);
                 mJsListener.setUrl(null);
-                conn.setRequestProperty("Cookie",mJsListener.cookies);
             }
 
-            // conn.setRequestProperty("Cookie",mJsListener.cookies);
+            // set request CooKie
+            String cookies = CookieManager.getInstance().getCookie(webViewUrl);
+            Log.d(TAG,"Request Cookie :" + cookies);
+            conn.setRequestProperty("Cookie",cookies);
+
+
+            Log.d(TAG,">>>>> Response >>>>>");
+
+            // according "Set-Cookie" field to add cookies into CookieManager
             Map<String, List<String>> headFields = conn.getHeaderFields();
             List<String> cookieList = headFields.get("Set-Cookie");
-
             if( null != cookieList){
-                Log.e("cookie","**********************Set-Cookie***********************");
                 CookieManager cookieManager = CookieManager.getInstance();
-                // cookieManager.setAcceptCookie(true);
-                CookieManager.getInstance().setAcceptThirdPartyCookies(view,true);
                 for(String cookie: cookieList) {
-                    Log.e("cookie","************ Set-Cookie : " + cookie);
+                    Log.e(TAG,"Response > Set-Cookie : "+ cookie);
                     cookieManager.setCookie(webViewUrl, cookie);
                 }
                 CookieSyncManager.getInstance().sync();
-                Log.e("cookie","************ For Url : " + request.getUrl().toString());
-                Log.e("cookie","**********************Set-Cookie***********************");
             }
 
+            // set WebResourceResponse to return
             String charset = conn.getContentEncoding() != null ? conn.getContentEncoding() : Charset.defaultCharset().displayName();
             String mime = conn.getContentType();
-            // Parse mime type from contenttype string
+            // parse mime type from content-type string
             if (mime.contains(";")) {
                 mime = mime.split(";")[0].trim();
             }
             byte[] pageContents = IOUtils.readFully(conn.getInputStream());
 
-            // Convert the contents and return
+            // convert the contents and return
+            Map<String,String> tmpMap = new HashMap<>();
+            for(Map.Entry<String, List<String>> entry: headFields.entrySet()){
+                String str = "";
+                for( String tampering : entry.getValue()){
+                    str = str + tampering;
+                }
+                tmpMap.put(entry.getKey(),str);
+            }
+
+            // convert the contents and return
             InputStream isContents = new ByteArrayInputStream(pageContents);
             String strContents = new String(pageContents, "UTF-8");
-            Log.e("Client:","mine :" + mime +" Charset: " + charset + " isContents:" + strContents);
-            return new WebResourceResponse(mime, charset, isContents);
 
-        } catch (ProtocolException e) {
-            e.printStackTrace();
-
-            return null;
-        } catch (IOException e) {
-            e.printStackTrace();
-
-            return null;
+            Log.d(TAG," WebResourceResponse >");
+            Log.d(TAG, " Mime : " + mime +" Charset : " + charset +
+                    " Response Code : " + conn.getResponseCode() +
+                    " Phase Reason : " + "OK" +
+                    " Header : " + tmpMap.toString() +
+                    " Content : " + strContents);
+            return new WebResourceResponse(mime,charset,conn.getResponseCode(),"OK",tmpMap,isContents);
         } catch (Exception e) {
-            return null;
+            e.printStackTrace();
+            return null;  // for any problem, return null to make the WebView load the resource itself.
         }
     }
 
