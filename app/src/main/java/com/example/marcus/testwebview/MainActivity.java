@@ -282,7 +282,7 @@ public class MainActivity extends AppCompatActivity {
             X500Principal subjectPrincipal = certificate.getSubjectX500Principal();
             Log.d("X509TrustManager" , "subject name :" + subjectPrincipal.getName());
 
-            throw new CertificateException("Error");
+            //throw new CertificateException("Error");
         }
 
         @Override
