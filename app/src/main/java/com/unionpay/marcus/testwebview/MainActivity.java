@@ -2,7 +2,6 @@ package com.unionpay.marcus.testwebview;
 
 import android.app.Activity;
 import android.net.http.SslError;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -14,8 +13,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
-
-import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -31,7 +28,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +43,6 @@ public class MainActivity extends Activity {
 
     private static final String HTTP = "http://";
     private static final String HTTPS = "https://";
-    //
 //    private static final String HOST = "172.20.143.41";
     private static final String HOST = "192.168.0.104";
     private static final String PORT = "8089";
@@ -153,6 +148,7 @@ public class MainActivity extends Activity {
 //            }
 
             // set request CooKie
+            Log.d(TAG,">>>>> set request CooKie >>>>>");
             String cookies = CookieManager.getInstance().getCookie(webViewUrl);
             Log.d(TAG,"Request Cookie :" + cookies);
             conn.setRequestProperty("Cookie",cookies);
@@ -217,7 +213,11 @@ public class MainActivity extends Activity {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
+        }
+        catch(Exception e){
+            e.printStackTrace();
+        }
+        finally {
             continueFlag = false;
         }
         WebResourceResponse rep = null;
