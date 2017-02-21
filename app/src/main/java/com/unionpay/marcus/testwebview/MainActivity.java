@@ -1,8 +1,11 @@
 package com.unionpay.marcus.testwebview;
 
 import android.app.Activity;
+import android.content.Context;
 import android.net.http.SslError;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -36,6 +39,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import javax.security.auth.callback.Callback;
 import javax.security.auth.x500.X500Principal;
 
 public class MainActivity extends Activity {
@@ -56,7 +60,9 @@ public class MainActivity extends Activity {
     private String webViewUrl = "https://wappass.baidu.com/";
 
     private boolean continueFlag = true;
-
+    private static CookieManager cookieManager;
+    private CookieSyncManager cookieSyncManager;
+    private Context mContext;
     public MainActivity() {
     }
 
@@ -64,7 +70,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        CookieSyncManager.createInstance(this);
+        // CookieSyncManager.createInstance(this);
+        mContext = this;
 
         mAddress = (EditText) findViewById(R.id.addressEt);
         mAddress.setText(DEFAULT_URL);
@@ -95,6 +102,14 @@ public class MainActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+
+                cookieSyncManager = CookieSyncManager.createInstance(mContext);
+                cookieManager = CookieManager.getInstance();
+                cookieManager.setAcceptCookie(true);
+                cookieManager.removeSessionCookie();
+                // cookieManager.setCookie("https://www.baidu.com/", "name=john");
+                // CookieSyncManager.getInstance().sync();
+                Log.d(TAG,"test cookies : "+ cookieManager.getCookie("https://www.baidu.com/"));
                 if (continueFlag){
                     return shouldInterceptRequestByURLConnection(view,url);
                 }
@@ -110,6 +125,11 @@ public class MainActivity extends Activity {
 
     public WebResourceResponse shouldInterceptRequestByURLConnection(WebView view,  String url){
         try {
+            // set request CooKie
+            Log.d(TAG,">>>>> set request CooKie >>>>>");
+            String cookies = cookieManager.getCookie(webViewUrl);
+            Log.d(TAG,"Request Cookie :" + cookies);
+
             //设置SSLContext
             SSLContext sslcontext = SSLContext.getInstance("TLS");
             sslcontext.init(null, new TrustManager[]{myX509TrustManager}, null);
@@ -125,32 +145,6 @@ public class MainActivity extends Activity {
             Log.d(TAG, "Request Method : " + "GET" + " / " + url);
             conn.setRequestMethod("GET");
 
-            // set request Header
-//            Map headers = request.getRequestHeaders();
-//            if(null != headers){
-//                Iterator<Map.Entry<String, String>> entries = headers.entrySet().iterator();
-//                while (entries.hasNext()) {
-//                    Map.Entry<String, String> entry = entries.next();
-//                    conn.setRequestProperty(entry.getKey(),entry.getValue());
-//                    Log.d(TAG, "Request Header : " + entry.getKey() + " : " + entry.getValue());
-//                }
-//            }
-
-            // set request Body if the request is 'POST'
-//            if(request.getMethod().toLowerCase().equals("post")){
-//                DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
-//                dos.writeBytes(mJsListener.getBody());
-//                dos.flush();
-//                dos.close();
-//                mJsListener.setMehod(null); // clear for next request
-//                mJsListener.setmBody(null);
-//                mJsListener.setUrl(null);
-//            }
-
-            // set request CooKie
-            Log.d(TAG,">>>>> set request CooKie >>>>>");
-            String cookies = CookieManager.getInstance().getCookie(webViewUrl);
-            Log.d(TAG,"Request Cookie :" + cookies);
             conn.setRequestProperty("Cookie",cookies);
 
             Log.d(TAG,">>>>> Response >>>>>");
@@ -158,12 +152,12 @@ public class MainActivity extends Activity {
             Map<String, List<String>> headFields = conn.getHeaderFields();
             List<String> cookieList = headFields.get("Set-Cookie");
             if( null != cookieList){
-                CookieManager cookieManager = CookieManager.getInstance();
+                // CookieManager cookieManager = CookieManager.getInstance();
                 for(String cookie: cookieList) {
                     Log.e(TAG,"Response > Set-Cookie : "+ cookie);
                     cookieManager.setCookie(webViewUrl, cookie);
                 }
-                CookieSyncManager.getInstance().sync();
+                cookieSyncManager.getInstance().sync();
             }
 
             // set WebResourceResponse to return
