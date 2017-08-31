@@ -4,8 +4,6 @@
       <root url="jar://$USER_HOME$/Library/Android/sdk/platforms/android-23/optional/org.apache.http.legacy.jar!/" />
     </CLASSES>
     <JAVADOC />
-    <SOURCES>
-      <root url="jar://$USER_HOME$/Library/Android/sdk/platforms/android-23/optional/org.apache.http.legacy.jar!/" />
-    </SOURCES>
+    <SOURCES />
   </library>
 </component>
