@@ -51,9 +51,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String HTTP = "http://";
     private static final String HTTPS = "https://";
     //
-//    private static final String HOST = "172.20.143.41";
-    private static final String HOST = "192.168.0.104";
-    private static final String PORT = "8089";
+    private static final String HOST = "172.20.143.41";
+    // private static final String HOST = "192.168.0.104";
+    private static final String PORT = "8083";
     private static final String DEFAULT_URL = HTTP + HOST + ":" + PORT + "/";
 
     private WebView mWebView;
@@ -152,12 +152,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
         // mWebView.loadUrl("https://www.taobao.com");
-        mWebView.loadUrl("https://www.baidu.com/");
+        // mWebView.loadUrl("https://www.baidu.com/");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             CookieManager.getInstance().setAcceptThirdPartyCookies(mWebView,true);
         }
         // mWebView.loadUrl(webViewUrl);
         // mWebView.loadUrl(HTTP + HOST + ":" + PORT + "/");
+        mWebView.loadUrl(DEFAULT_URL);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
